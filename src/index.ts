@@ -19,16 +19,24 @@ import {
 import { loadContacts, addContact, removeContact, findContact, saveKeypair, loadKeypair, getOrCreateAccount, loadAccount } from "./contacts.js";
 import { checkAlgod, getAlgod, getIndexer, getSuggestedParams, submitAndWait } from "./algorand.js";
 
+let jsonMode = false;
+
+function sendJson(data: unknown): void {
+  sendOutput(JSON.stringify(data));
+}
+
 async function main() {
   const init = await recvJson<InitMessage>();
   const args = init.args;
-  const subcmd = args[0] ?? "help";
+  jsonMode = args.includes("--json");
+  const filteredArgs = args.filter(a => a !== "--json");
+  const subcmd = filteredArgs[0] ?? "help";
 
   switch (subcmd) {
     case "keygen": await cmdKeygen(); break;
-    case "contacts": await cmdContacts(args.slice(1)); break;
-    case "send": await cmdSend(args.slice(1)); break;
-    case "read": await cmdRead(args.slice(1)); break;
+    case "contacts": await cmdContacts(filteredArgs.slice(1)); break;
+    case "send": await cmdSend(filteredArgs.slice(1)); break;
+    case "read": await cmdRead(filteredArgs.slice(1)); break;
     case "help": case "--help": case "-h": cmdHelp(); break;
     default:
       sendError(`Unknown command: ${subcmd}. Run: fledge algochat help`);
@@ -40,7 +48,7 @@ async function main() {
 
 async function cmdKeygen() {
   const existing = await loadKeypair();
-  if (existing) {
+  if (existing && !jsonMode) {
     const confirmed = await sendConfirm("A keypair already exists. Overwrite it?");
     if (!confirmed) {
       sendOutput("Cancelled.");
@@ -50,9 +58,17 @@ async function cmdKeygen() {
 
   const kp = generateEphemeralKeyPair();
   await saveKeypair(kp.publicKey, kp.privateKey);
-  sendOutput(`Generated X25519 keypair.`);
-  sendOutput(`Public key: ${publicKeyToBase64(kp.publicKey)}`);
-  sendOutput(`Fingerprint: ${fingerprint(kp.publicKey)}`);
+  const data = {
+    publicKey: publicKeyToBase64(kp.publicKey),
+    fingerprint: fingerprint(kp.publicKey),
+  };
+  if (jsonMode) {
+    sendJson({ ok: true, ...data });
+  } else {
+    sendOutput(`Generated X25519 keypair.`);
+    sendOutput(`Public key: ${data.publicKey}`);
+    sendOutput(`Fingerprint: ${data.fingerprint}`);
+  }
 }
 
 async function cmdContacts(args: string[]) {
@@ -68,7 +84,11 @@ async function cmdContacts(args: string[]) {
       process.exit(1);
     }
     await addContact(name, address, psk, pubkey);
-    sendOutput(`Added contact: ${name}`);
+    if (jsonMode) {
+      sendJson({ ok: true, action: "add", name, address });
+    } else {
+      sendOutput(`Added contact: ${name}`);
+    }
     return;
   }
 
@@ -83,7 +103,11 @@ async function cmdContacts(args: string[]) {
       const parsed = parsePSKExchangeURI(uri);
       const pskB64 = publicKeyToBase64(parsed.psk);
       await addContact(name, parsed.address, pskB64);
-      sendOutput(`Added contact from URI: ${name} (${parsed.address.substring(0, 8)}...)`);
+      if (jsonMode) {
+        sendJson({ ok: true, action: "add-uri", name, address: parsed.address });
+      } else {
+        sendOutput(`Added contact from URI: ${name} (${parsed.address.substring(0, 8)}...)`);
+      }
     } catch (err) {
       sendError(`Invalid PSK exchange URI: ${err}`);
       process.exit(1);
@@ -98,12 +122,21 @@ async function cmdContacts(args: string[]) {
       process.exit(1);
     }
     const removed = await removeContact(name);
-    if (removed) sendOutput(`Removed contact: ${name}`);
-    else sendError(`Contact not found: ${name}`);
+    if (jsonMode) {
+      sendJson({ ok: removed, action: "remove", name });
+    } else {
+      if (removed) sendOutput(`Removed contact: ${name}`);
+      else sendError(`Contact not found: ${name}`);
+    }
     return;
   }
 
   const contacts = await loadContacts();
+  if (jsonMode) {
+    sendJson({ contacts: contacts.map(c => ({ name: c.name, address: c.address, hasPsk: !!c.psk, hasPubkey: !!c.pubkey })) });
+    return;
+  }
+
   if (contacts.length === 0) {
     sendOutput("No contacts. Add one: fledge algochat contacts add <name> <address> <psk> [<pubkey>]");
     return;
@@ -180,7 +213,12 @@ async function cmdSend(args: string[]) {
   const signed = txn.signTxn(account.sk);
   const txid = await submitAndWait(signed);
   await savePSKState(stateKey, newState);
-  sendOutput(`Message sent to ${contact?.name ?? address} (txid: ${txid})`);
+
+  if (jsonMode) {
+    sendJson({ ok: true, to: contact?.name ?? address, txid, counter });
+  } else {
+    sendOutput(`Message sent to ${contact?.name ?? address} (txid: ${txid})`);
+  }
 }
 
 async function cmdRead(args: string[]) {
@@ -220,13 +258,8 @@ async function cmdRead(args: string[]) {
     process.exit(1);
   }
 
-  if (transactions.length === 0) {
-    sendOutput("No transactions found.");
-    return;
-  }
-
   const contacts = await loadContacts();
-  let decryptedCount = 0;
+  const messages: { round: number; direction: string; peer: string; text: string; txid: string }[] = [];
 
   for (const tx of transactions) {
     const noteB64: string | undefined = tx.note;
@@ -265,23 +298,34 @@ async function cmdRead(args: string[]) {
       const decrypted = decryptPSKMessage(envelope, kp.privateKey, kp.publicKey, currentPSK);
       if (!decrypted) continue;
 
-      const direction = tx.sender === account.address ? "→" : "←";
+      const direction = tx.sender === account.address ? "out" : "in";
       const peer = contact.name ?? senderAddr.substring(0, 8) + "...";
-      const round = tx["confirmed-round"] ?? "?";
-      sendOutput(`[${round}] ${direction} ${peer}: ${decrypted.text}`);
-      decryptedCount++;
+      const round = tx["confirmed-round"] ?? 0;
+      messages.push({ round, direction, peer, text: decrypted.text, txid: tx.id ?? "" });
     } catch {
       continue;
     }
   }
 
-  if (decryptedCount === 0) {
+  if (jsonMode) {
+    sendJson({ messages, total: transactions.length });
+    return;
+  }
+
+  if (messages.length === 0) {
     const totalWithNotes = transactions.filter((t: any) => t.note).length;
     if (totalWithNotes > 0) {
       sendOutput(`Found ${totalWithNotes} transaction(s) with notes, but none could be decrypted.`);
       sendOutput("Check that sender is in your contacts with the correct PSK.");
+    } else if (transactions.length === 0) {
+      sendOutput("No transactions found.");
     } else {
       sendOutput("No messages found.");
+    }
+  } else {
+    for (const m of messages) {
+      const arrow = m.direction === "out" ? "→" : "←";
+      sendOutput(`[${m.round}] ${arrow} ${m.peer}: ${m.text}`);
     }
   }
 }
@@ -291,13 +335,15 @@ function cmdHelp() {
   sendOutput("  Powered by @corvidlabs/ts-algochat");
   sendOutput("");
   sendOutput("Commands:");
-  sendOutput("  send <addr|name> <msg>                 Send encrypted message");
-  sendOutput("  read [--limit N] [--from <name>]        Read & decrypt messages");
-  sendOutput("  contacts                                List contacts");
-  sendOutput("  contacts add <name> <addr> <psk> [key]  Add contact (base64)");
-  sendOutput("  contacts add-uri <name> <uri>           Add via PSK exchange URI");
-  sendOutput("  contacts remove <name>                  Remove contact");
-  sendOutput("  keygen                                  Generate X25519 keypair");
+  sendOutput("  send <addr|name> <msg> [--json]         Send encrypted message");
+  sendOutput("  read [--limit N] [--from <name>] [--json]  Read & decrypt messages");
+  sendOutput("  contacts [--json]                        List contacts");
+  sendOutput("  contacts add <name> <addr> <psk> [key]   Add contact (base64)");
+  sendOutput("  contacts add-uri <name> <uri>            Add via PSK exchange URI");
+  sendOutput("  contacts remove <name>                   Remove contact");
+  sendOutput("  keygen [--json]                          Generate X25519 keypair");
+  sendOutput("");
+  sendOutput("Use --json for machine-readable output.");
 }
 
 async function loadPSKState(key: string): Promise<PSKState> {
