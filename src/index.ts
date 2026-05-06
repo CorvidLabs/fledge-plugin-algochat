@@ -174,12 +174,15 @@ async function cmdSend(args: string[]) {
 async function cmdRead(args: string[]) {
   let limit = 20;
   let from: string | undefined;
+  let indexerUrl = "http://localhost:8980";
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--limit" && args[i + 1]) {
       limit = parseInt(args[++i], 10);
     } else if (args[i] === "--from" && args[i + 1]) {
       from = args[++i];
+    } else if (args[i] === "--indexer" && args[i + 1]) {
+      indexerUrl = args[++i];
     }
   }
 
@@ -189,23 +192,93 @@ async function cmdRead(args: string[]) {
     process.exit(1);
   }
 
-  const myAddress = `$(goal account list | head -1 | awk '{print $2}')`;
-  const cmd = `goal account transactions -a ${myAddress} --firstvalid 1 --lastvalid 999999999 2>&1 | head -${limit * 2}`;
-  const result = await sendExec(cmd);
+  const addrResult = await sendExec("goal account list | head -1 | awk '{print $2}'");
+  if (addrResult.code !== 0 || !addrResult.stdout.trim()) {
+    sendError("Could not determine account address. Is localnet running?");
+    process.exit(1);
+  }
+  const myAddress = addrResult.stdout.trim();
 
-  if (result.code !== 0) {
-    sendError(`Failed to read transactions: ${result.stderr || result.stdout}`);
-    sendOutput("Make sure localnet is running: fledge localnet start");
+  const url = `${indexerUrl}/v2/accounts/${myAddress}/transactions?limit=${limit}`;
+  const fetchResult = await sendExec(`curl -s '${url}'`);
+  if (fetchResult.code !== 0 || !fetchResult.stdout.trim()) {
+    sendError("Could not reach indexer. Make sure localnet is running: fledge localnet start");
     process.exit(1);
   }
 
-  if (!result.stdout.trim()) {
-    sendOutput("No messages found.");
+  let txns: any;
+  try {
+    txns = JSON.parse(fetchResult.stdout);
+  } catch {
+    sendError("Invalid response from indexer.");
+    process.exit(1);
+  }
+
+  const transactions = txns.transactions ?? [];
+  if (transactions.length === 0) {
+    sendOutput("No transactions found.");
     return;
   }
 
-  sendOutput("Recent transactions:");
-  sendOutput(result.stdout.trim());
+  const contacts = await loadContacts();
+  let decryptedCount = 0;
+
+  for (const tx of transactions) {
+    const noteB64: string | undefined = tx.note;
+    if (!noteB64) continue;
+
+    let noteBytes: Uint8Array;
+    try {
+      noteBytes = new Uint8Array(Buffer.from(noteB64, "base64"));
+    } catch {
+      continue;
+    }
+
+    if (!isPSKMessage(noteBytes)) continue;
+
+    let envelope;
+    try {
+      envelope = decodePSKEnvelope(noteBytes);
+    } catch {
+      continue;
+    }
+
+    const senderAddr = tx["payment-transaction"]?.receiver === myAddress
+      ? tx.sender
+      : tx["payment-transaction"]?.receiver ?? tx.sender;
+
+    const contact = from
+      ? contacts.find(c => c.name === from || c.address === from)
+      : contacts.find(c => c.address === senderAddr || c.address === tx.sender);
+
+    if (!contact?.psk) continue;
+
+    const initialPSK = base64ToPublicKey(contact.psk);
+    const currentPSK = derivePSKAtCounter(initialPSK, envelope.ratchetCounter);
+
+    try {
+      const decrypted = decryptPSKMessage(envelope, kp.privateKey, kp.publicKey, currentPSK);
+      if (!decrypted) continue;
+
+      const direction = tx.sender === myAddress ? "→" : "←";
+      const peer = contact.name ?? senderAddr.substring(0, 8) + "...";
+      const round = tx["confirmed-round"] ?? "?";
+      sendOutput(`[${round}] ${direction} ${peer}: ${decrypted.text}`);
+      decryptedCount++;
+    } catch {
+      continue;
+    }
+  }
+
+  if (decryptedCount === 0) {
+    const totalWithNotes = transactions.filter((t: any) => t.note).length;
+    if (totalWithNotes > 0) {
+      sendOutput(`Found ${totalWithNotes} transaction(s) with notes, but none could be decrypted.`);
+      sendOutput("Check that sender is in your contacts with the correct PSK.");
+    } else {
+      sendOutput("No messages found.");
+    }
+  }
 }
 
 function cmdHelp() {
@@ -214,7 +287,7 @@ function cmdHelp() {
   sendOutput("");
   sendOutput("Commands:");
   sendOutput("  send <addr|name> <msg>                 Send encrypted message");
-  sendOutput("  read [--limit N] [--from <addr>]        Read transactions");
+  sendOutput("  read [--limit N] [--from <name>]        Read & decrypt messages");
   sendOutput("  contacts                                List contacts");
   sendOutput("  contacts add <name> <addr> <psk> [key]  Add contact (base64)");
   sendOutput("  contacts add-uri <name> <uri>           Add via PSK exchange URI");
