@@ -125,7 +125,7 @@ async function cmdSend(args: string[]) {
   const sendCmd = `goal clerk send -a 0 -f $(goal account list | head -1 | awk '{print $2}') -t ${address} --note "${noteB64}" 2>&1`;
   const result = await sendExec(sendCmd);
 
-  if (result.exit_code !== 0) {
+  if (result.code !== 0) {
     sendError(`Transaction failed: ${result.stderr || result.stdout}`);
     process.exit(1);
   }
@@ -156,7 +156,7 @@ async function cmdRead(args: string[]) {
   const cmd = `goal account transactions -a ${myAddress} --firstvalid 1 --lastvalid 999999999 2>&1 | head -${limit * 2}`;
   const result = await sendExec(cmd);
 
-  if (result.exit_code !== 0) {
+  if (result.code !== 0) {
     sendError(`Failed to read transactions: ${result.stderr || result.stdout}`);
     sendOutput("Make sure localnet is running: fledge localnet start");
     process.exit(1);
