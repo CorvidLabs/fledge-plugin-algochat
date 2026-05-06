@@ -10,6 +10,8 @@ import {
   derivePSKAtCounter,
   advanceSendCounter,
   createPSKState,
+  validateCounter,
+  recordReceive,
   publicKeyToBase64,
   base64ToPublicKey,
   fingerprint,
@@ -35,6 +37,15 @@ function sendJson(data: unknown): void {
   sendOutput(JSON.stringify(data));
 }
 
+function isMainnet(): boolean {
+  // We don't talk to algod here (no async at startup). Heuristic: any
+  // ALGOD_URL containing 'mainnet' (e.g., algonode mainnet) is treated
+  // as production. Users on a custom mainnet relay can opt-in via the
+  // override env var.
+  const url = (process.env.ALGOD_URL ?? "").toLowerCase();
+  return url.includes("mainnet");
+}
+
 async function main() {
   const init = await recvJson<InitMessage>();
   const args = init.args;
@@ -42,6 +53,20 @@ async function main() {
   jsonMode = args.includes("--json");
   const filteredArgs = args.filter(a => a !== "--json");
   const subcmd = filteredArgs[0] ?? "help";
+
+  // Refuse mainnet operation unless explicitly overridden. The crypto
+  // layer is not yet audited; running this against real funds is not
+  // a supported workflow and small bugs (nonce reuse, key leak through
+  // logs) become irrecoverable when the mistake is on chain.
+  if (isMainnet() && process.env.FLEDGE_ALGOCHAT_ALLOW_MAINNET !== "1") {
+    sendError(
+      "Refusing to run against mainnet (ALGOD_URL contains 'mainnet'). " +
+      "Set FLEDGE_ALGOCHAT_ALLOW_MAINNET=1 to override — but understand " +
+      "that the underlying crypto stack has not been audited and on-chain " +
+      "messages are public and immutable.",
+    );
+    process.exit(1);
+  }
 
   switch (subcmd) {
     case "keygen": await cmdKeygen(); break;
@@ -316,6 +341,29 @@ async function cmdRead(args: string[]) {
 
     if (!contact?.psk) continue;
 
+    // Sender authentication: if we know this contact's X25519 pubkey
+    // (set when the contact was added), the envelope's claimed sender
+    // pubkey must match it. Otherwise anyone holding the PSK could
+    // send "from" any contact address. If we don't know the pubkey,
+    // accept (TOFU) but flag in the message metadata so callers can
+    // distinguish.
+    let pubkeyVerified = false;
+    if (contact.pubkey) {
+      try {
+        const expected = base64ToPublicKey(contact.pubkey);
+        const claimed = envelope.senderPublicKey;
+        if (expected.length !== claimed.length ||
+            !expected.every((b, i) => b === claimed[i])) {
+          // Reject: mismatched sender pubkey. This is the case where
+          // someone with the leaked PSK tries to impersonate the contact.
+          continue;
+        }
+        pubkeyVerified = true;
+      } catch {
+        continue;
+      }
+    }
+
     const initialPSK = base64ToPublicKey(contact.psk);
     const currentPSK = derivePSKAtCounter(initialPSK, envelope.ratchetCounter);
 
@@ -324,9 +372,25 @@ async function cmdRead(args: string[]) {
       if (!decrypted) continue;
 
       const direction = tx.sender === account.address ? "out" : "in";
+
+      // Replay protection: only enforce for *inbound* messages — our
+      // own send loop maintains its own send-counter and we don't
+      // need to "consume" a receive slot for our own outbound copy.
+      if (direction === "in") {
+        const stateKey = `psk-state:${contact.name}`;
+        const pskState = await loadPSKState(stateKey);
+        if (!validateCounter(pskState, envelope.ratchetCounter)) {
+          // Replay or out-of-window — drop. Don't bubble an error;
+          // a replay attempt is normal in a noisy network.
+          continue;
+        }
+        const updated = recordReceive(pskState, envelope.ratchetCounter);
+        await savePSKState(stateKey, updated);
+      }
+
       const peer = contact.name ?? senderAddr.substring(0, 8) + "...";
       const round = tx["confirmed-round"] ?? 0;
-      messages.push({ round, direction, peer, text: decrypted.text, txid: tx.id ?? "" });
+      messages.push({ round, direction, peer, text: decrypted.text, txid: tx.id ?? "", pubkeyVerified });
     } catch {
       continue;
     }
