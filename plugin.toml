@@ -11,7 +11,7 @@ description = "Encrypted on-chain messaging"
 binary = "bin/fledge-algochat"
 
 [hooks]
-build = "bun install && bun build src/index.ts --compile --outfile bin/fledge-algochat"
+build = "hooks/build.sh"
 
 [capabilities]
 exec = true
