@@ -29,6 +29,8 @@ async function main() {
       sendError(`Unknown command: ${subcmd}. Run: fledge algochat help`);
       process.exit(1);
   }
+
+  process.exit(0);
 }
 
 async function cmdKeygen() {
