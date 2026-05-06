@@ -42,6 +42,6 @@ export async function saveState(state: DurableState): Promise<void> {
   cachedState = state;
   const filePath = statePath();
   const json = JSON.stringify(state, null, 2);
-  const escaped = json.replace(/\\/g, "\\\\").replace(/'/g, "'\\''");
+  const escaped = json.replace(/'/g, "'\\''");
   await sendExec(`mkdir -p '${projectRoot}/.fledge' && printf '%s' '${escaped}' > '${filePath}' && chmod 600 '${filePath}'`);
 }
