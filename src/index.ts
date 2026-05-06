@@ -1,5 +1,5 @@
 import algosdk from "algosdk";
-import { recvJson, sendOutput, sendError, sendConfirm, sendStore, sendLoad, type InitMessage } from "./protocol.js";
+import { recvJson, sendOutput, sendError, sendConfirm, type InitMessage } from "./protocol.js";
 import {
   generateEphemeralKeyPair,
   encryptPSKMessage,
@@ -18,6 +18,7 @@ import {
 } from "@corvidlabs/ts-algochat";
 import { loadContacts, addContact, removeContact, findContact, saveKeypair, loadKeypair, getOrCreateAccount, loadAccount } from "./contacts.js";
 import { checkAlgod, getAlgod, getIndexer, getSuggestedParams, submitAndWait } from "./algorand.js";
+import { initState, loadState, saveState } from "./state.js";
 
 let jsonMode = false;
 
@@ -37,6 +38,7 @@ function sendJson(data: unknown): void {
 async function main() {
   const init = await recvJson<InitMessage>();
   const args = init.args;
+  initState(init.project.root);
   jsonMode = args.includes("--json");
   const filteredArgs = args.filter(a => a !== "--json");
   const subcmd = filteredArgs[0] ?? "help";
@@ -369,26 +371,24 @@ function cmdHelp() {
 }
 
 async function loadPSKState(key: string): Promise<PSKState> {
-  const raw = await sendLoad(key);
-  if (!raw) return createPSKState();
-  try {
-    const data = JSON.parse(raw);
-    return {
-      sendCounter: data.sendCounter ?? 0,
-      peerLastCounter: data.peerLastCounter ?? -1,
-      seenCounters: new Set(data.seenCounters ?? []),
-    };
-  } catch {
-    return createPSKState();
-  }
+  const state = await loadState();
+  const data = state.pskCounters[key];
+  if (!data) return createPSKState();
+  return {
+    sendCounter: data.sendCounter ?? 0,
+    peerLastCounter: data.peerLastCounter ?? -1,
+    seenCounters: new Set(data.seenCounters ?? []),
+  };
 }
 
-async function savePSKState(key: string, state: PSKState): Promise<void> {
-  sendStore(key, JSON.stringify({
-    sendCounter: state.sendCounter,
-    peerLastCounter: state.peerLastCounter,
-    seenCounters: Array.from(state.seenCounters),
-  }));
+async function savePSKState(key: string, pskState: PSKState): Promise<void> {
+  const state = await loadState();
+  state.pskCounters[key] = {
+    sendCounter: pskState.sendCounter,
+    peerLastCounter: pskState.peerLastCounter,
+    seenCounters: Array.from(pskState.seenCounters),
+  };
+  await saveState(state);
 }
 
 main().catch((err) => {
