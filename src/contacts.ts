@@ -1,13 +1,14 @@
 import { sendStore, sendLoad } from "./protocol.js";
-import { toHex, fromHex } from "./crypto.js";
+import { publicKeyToBase64, base64ToPublicKey } from "@corvidlabs/ts-algochat";
 
 export interface Contact {
   name: string;
   address: string;
-  psk: string;
+  psk: string; // base64-encoded 32-byte PSK
+  pubkey?: string; // base64-encoded X25519 public key
 }
 
-export interface ContactStore {
+interface ContactStore {
   contacts: Contact[];
 }
 
@@ -27,16 +28,17 @@ export async function loadContacts(): Promise<Contact[]> {
 
 export async function saveContacts(contacts: Contact[]): Promise<void> {
   const store: ContactStore = { contacts };
-  await sendStore(CONTACTS_KEY, JSON.stringify(store));
+  sendStore(CONTACTS_KEY, JSON.stringify(store));
 }
 
-export async function addContact(name: string, address: string, psk: string): Promise<void> {
+export async function addContact(name: string, address: string, psk: string, pubkey?: string): Promise<void> {
   const contacts = await loadContacts();
   const existing = contacts.findIndex(c => c.name === name);
+  const contact: Contact = { name, address, psk, ...(pubkey ? { pubkey } : {}) };
   if (existing >= 0) {
-    contacts[existing] = { name, address, psk };
+    contacts[existing] = contact;
   } else {
-    contacts.push({ name, address, psk });
+    contacts.push(contact);
   }
   await saveContacts(contacts);
 }
@@ -55,7 +57,10 @@ export async function findContact(nameOrAddress: string): Promise<Contact | null
 }
 
 export async function saveKeypair(publicKey: Uint8Array, privateKey: Uint8Array): Promise<void> {
-  await sendStore(KEYPAIR_KEY, JSON.stringify({ publicKey: toHex(publicKey), privateKey: toHex(privateKey) }));
+  sendStore(KEYPAIR_KEY, JSON.stringify({
+    publicKey: publicKeyToBase64(publicKey),
+    privateKey: publicKeyToBase64(privateKey),
+  }));
 }
 
 export async function loadKeypair(): Promise<{ publicKey: Uint8Array; privateKey: Uint8Array } | null> {
@@ -63,7 +68,10 @@ export async function loadKeypair(): Promise<{ publicKey: Uint8Array; privateKey
   if (!raw) return null;
   try {
     const data = JSON.parse(raw);
-    return { publicKey: fromHex(data.publicKey), privateKey: fromHex(data.privateKey) };
+    return {
+      publicKey: base64ToPublicKey(data.publicKey),
+      privateKey: base64ToPublicKey(data.privateKey),
+    };
   } catch {
     return null;
   }

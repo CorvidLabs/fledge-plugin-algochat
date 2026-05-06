@@ -8,10 +8,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@noble/curves": "^1.8.0",
-    "@noble/ciphers": "^1.2.0",
-    "@noble/hashes": "^1.7.0",
-    "algosdk": "^3.2.0"
+    "@corvidlabs/ts-algochat": "^0.4.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0"
