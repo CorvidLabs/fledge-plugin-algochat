@@ -17,7 +17,7 @@ import {
   type PSKState,
 } from "@corvidlabs/ts-algochat";
 import { loadContacts, addContact, removeContact, findContact, saveKeypair, loadKeypair, getOrCreateAccount, loadAccount } from "./contacts.js";
-import { checkAlgod, getAlgod, getIndexer, getSuggestedParams, submitAndWait } from "./algorand.js";
+import { checkAlgod, getAlgod, getIndexer, getSuggestedParams, submitAndWait, ensureFunded } from "./algorand.js";
 import { initState, loadState, saveState } from "./state.js";
 
 let jsonMode = false;
@@ -210,6 +210,7 @@ async function cmdSend(args: string[]) {
   }
 
   const account = await getOrCreateAccount();
+  await ensureFunded(account.address);
   const initialPSK = base64ToPublicKey(pskB64);
   const recipientPubKey = base64ToPublicKey(pubkeyB64);
 

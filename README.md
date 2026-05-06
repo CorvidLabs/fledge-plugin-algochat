@@ -32,6 +32,37 @@ Keypairs, contacts, Algorand account, and PSK ratchet counters are stored in `.f
 - Algorand addresses are validated at input boundaries before use.
 - PSK ratchet counters are persisted durably to maintain forward secrecy across sessions.
 
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ALGOD_URL` | `http://localhost:4001` | Algorand algod endpoint |
+| `INDEXER_URL` | `http://localhost:8980` | Algorand indexer endpoint |
+| `KMD_URL` | `http://localhost:4002` | KMD endpoint (for auto-funding) |
+| `ALGOD_TOKEN` | localnet default | Algod API token |
+| `KMD_TOKEN` | localnet default | KMD API token |
+
+When sending a message, the plugin automatically checks if the sender account is funded. If not and KMD is reachable, it auto-funds with 10 ALGO from the default wallet.
+
+## Remote Localnet (socat)
+
+If the Algorand localnet runs on a different machine (e.g., a host providing Docker to a sandboxed agent), bridge the ports with socat:
+
+```bash
+# On the host running Docker/AlgoKit localnet:
+socat TCP-LISTEN:4001,fork,reuseaddr,bind=0.0.0.0 TCP:localhost:4001 &
+socat TCP-LISTEN:8980,fork,reuseaddr,bind=0.0.0.0 TCP:localhost:8980 &
+socat TCP-LISTEN:4002,fork,reuseaddr,bind=0.0.0.0 TCP:localhost:4002 &
+```
+
+Then set env vars on the agent side:
+
+```bash
+export ALGOD_URL=http://<host-ip>:4001
+export INDEXER_URL=http://<host-ip>:8980
+export KMD_URL=http://<host-ip>:4002
+```
+
 ## Prerequisites
 
 - Algorand localnet or remote algod endpoint
