@@ -18,7 +18,7 @@ import {
 } from "@corvidlabs/ts-algochat";
 import { loadContacts, addContact, removeContact, findContact, saveKeypair, loadKeypair, getOrCreateAccount, loadAccount } from "./contacts.js";
 import { checkAlgod, getAlgod, getIndexer, getSuggestedParams, submitAndWait, ensureFunded } from "./algorand.js";
-import { initState, loadState, saveState } from "./state.js";
+import { initState, loadState, saveState, withState } from "./state.js";
 
 let jsonMode = false;
 
@@ -383,13 +383,14 @@ async function loadPSKState(key: string): Promise<PSKState> {
 }
 
 async function savePSKState(key: string, pskState: PSKState): Promise<void> {
-  const state = await loadState();
-  state.pskCounters[key] = {
-    sendCounter: pskState.sendCounter,
-    peerLastCounter: pskState.peerLastCounter,
-    seenCounters: Array.from(pskState.seenCounters),
-  };
-  await saveState(state);
+  await withState(state => {
+    state.pskCounters[key] = {
+      sendCounter: pskState.sendCounter,
+      peerLastCounter: pskState.peerLastCounter,
+      seenCounters: Array.from(pskState.seenCounters),
+    };
+    return state;
+  });
 }
 
 main().catch((err) => {

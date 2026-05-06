@@ -1,6 +1,6 @@
 import algosdk from "algosdk";
 import { publicKeyToBase64, base64ToPublicKey } from "@corvidlabs/ts-algochat";
-import { loadState, saveState } from "./state.js";
+import { loadState, saveState, withState } from "./state.js";
 
 export interface Contact {
   name: string;
@@ -20,24 +20,28 @@ export async function loadContacts(): Promise<Contact[]> {
 }
 
 export async function addContact(name: string, address: string, psk: string, pubkey?: string): Promise<void> {
-  const state = await loadState();
-  const contact: Contact = { name, address, psk, ...(pubkey ? { pubkey } : {}) };
-  const existing = state.contacts.findIndex(c => c.name === name);
-  if (existing >= 0) {
-    state.contacts[existing] = contact;
-  } else {
-    state.contacts.push(contact);
-  }
-  await saveState(state);
+  await withState(state => {
+    const contact: Contact = { name, address, psk, ...(pubkey ? { pubkey } : {}) };
+    const existing = state.contacts.findIndex(c => c.name === name);
+    if (existing >= 0) {
+      state.contacts[existing] = contact;
+    } else {
+      state.contacts.push(contact);
+    }
+    return state;
+  });
 }
 
 export async function removeContact(name: string): Promise<boolean> {
-  const state = await loadState();
-  const filtered = state.contacts.filter(c => c.name !== name);
-  if (filtered.length === state.contacts.length) return false;
-  state.contacts = filtered;
-  await saveState(state);
-  return true;
+  let removed = false;
+  await withState(state => {
+    const filtered = state.contacts.filter(c => c.name !== name);
+    if (filtered.length === state.contacts.length) return state;
+    state.contacts = filtered;
+    removed = true;
+    return state;
+  });
+  return removed;
 }
 
 export async function findContact(nameOrAddress: string): Promise<Contact | null> {
@@ -46,12 +50,13 @@ export async function findContact(nameOrAddress: string): Promise<Contact | null
 }
 
 export async function saveKeypair(publicKey: Uint8Array, privateKey: Uint8Array): Promise<void> {
-  const state = await loadState();
-  state.keypair = {
-    publicKey: publicKeyToBase64(publicKey),
-    privateKey: publicKeyToBase64(privateKey),
-  };
-  await saveState(state);
+  await withState(state => {
+    state.keypair = {
+      publicKey: publicKeyToBase64(publicKey),
+      privateKey: publicKeyToBase64(privateKey),
+    };
+    return state;
+  });
 }
 
 export async function loadKeypair(): Promise<{ publicKey: Uint8Array; privateKey: Uint8Array } | null> {
@@ -68,20 +73,25 @@ export async function loadKeypair(): Promise<{ publicKey: Uint8Array; privateKey
 }
 
 export async function getOrCreateAccount(): Promise<AlgoAccount> {
-  const state = await loadState();
-  if (state.account) {
-    try {
-      const account = algosdk.mnemonicToSecretKey(state.account.mnemonic);
-      return { address: account.addr.toString(), sk: account.sk };
-    } catch {}
-  }
-  const account = algosdk.generateAccount();
-  state.account = {
-    address: account.addr.toString(),
-    mnemonic: algosdk.secretKeyToMnemonic(account.sk),
-  };
-  await saveState(state);
-  return { address: account.addr.toString(), sk: account.sk };
+  let result: AlgoAccount | null = null;
+  await withState(state => {
+    if (state.account) {
+      try {
+        const acct = algosdk.mnemonicToSecretKey(state.account.mnemonic);
+        result = { address: acct.addr.toString(), sk: acct.sk };
+        return state;
+      } catch {}
+    }
+    const account = algosdk.generateAccount();
+    state.account = {
+      address: account.addr.toString(),
+      mnemonic: algosdk.secretKeyToMnemonic(account.sk),
+    };
+    result = { address: account.addr.toString(), sk: account.sk };
+    return state;
+  });
+  // result is set in every branch above
+  return result!;
 }
 
 export async function loadAccount(): Promise<AlgoAccount | null> {
