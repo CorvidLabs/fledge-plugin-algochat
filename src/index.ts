@@ -124,9 +124,13 @@ async function cmdContacts(args: string[]) {
     const removed = await removeContact(name);
     if (jsonMode) {
       sendJson({ ok: removed, action: "remove", name });
+      if (!removed) process.exit(1);
     } else {
       if (removed) sendOutput(`Removed contact: ${name}`);
-      else sendError(`Contact not found: ${name}`);
+      else {
+        sendError(`Contact not found: ${name}`);
+        process.exit(1);
+      }
     }
     return;
   }
