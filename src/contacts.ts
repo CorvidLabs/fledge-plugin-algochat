@@ -1,3 +1,4 @@
+import algosdk from "algosdk";
 import { sendStore, sendLoad } from "./protocol.js";
 import { publicKeyToBase64, base64ToPublicKey } from "@corvidlabs/ts-algochat";
 
@@ -8,12 +9,18 @@ export interface Contact {
   pubkey?: string; // base64-encoded X25519 public key
 }
 
+export interface AlgoAccount {
+  address: string;
+  sk: Uint8Array;
+}
+
 interface ContactStore {
   contacts: Contact[];
 }
 
 const CONTACTS_KEY = "contacts";
 const KEYPAIR_KEY = "keypair";
+const ACCOUNT_KEY = "algo-account";
 
 export async function loadContacts(): Promise<Contact[]> {
   const raw = await sendLoad(CONTACTS_KEY);
@@ -72,6 +79,35 @@ export async function loadKeypair(): Promise<{ publicKey: Uint8Array; privateKey
       publicKey: base64ToPublicKey(data.publicKey),
       privateKey: base64ToPublicKey(data.privateKey),
     };
+  } catch {
+    return null;
+  }
+}
+
+export async function getOrCreateAccount(): Promise<AlgoAccount> {
+  const raw = await sendLoad(ACCOUNT_KEY);
+  if (raw) {
+    try {
+      const data = JSON.parse(raw);
+      const account = algosdk.mnemonicToSecretKey(data.mnemonic);
+      return { address: account.addr.toString(), sk: account.sk };
+    } catch {}
+  }
+  const account = algosdk.generateAccount();
+  sendStore(ACCOUNT_KEY, JSON.stringify({
+    address: account.addr.toString(),
+    mnemonic: algosdk.secretKeyToMnemonic(account.sk),
+  }));
+  return { address: account.addr.toString(), sk: account.sk };
+}
+
+export async function loadAccount(): Promise<AlgoAccount | null> {
+  const raw = await sendLoad(ACCOUNT_KEY);
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw);
+    const account = algosdk.mnemonicToSecretKey(data.mnemonic);
+    return { address: account.addr.toString(), sk: account.sk };
   } catch {
     return null;
   }

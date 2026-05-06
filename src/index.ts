@@ -1,4 +1,5 @@
-import { recvJson, sendOutput, sendError, sendExec, sendConfirm, sendStore, sendLoad, type InitMessage } from "./protocol.js";
+import algosdk from "algosdk";
+import { recvJson, sendOutput, sendError, sendConfirm, sendStore, sendLoad, type InitMessage } from "./protocol.js";
 import {
   generateEphemeralKeyPair,
   encryptPSKMessage,
@@ -15,7 +16,8 @@ import {
   parsePSKExchangeURI,
   type PSKState,
 } from "@corvidlabs/ts-algochat";
-import { loadContacts, addContact, removeContact, findContact, saveKeypair, loadKeypair } from "./contacts.js";
+import { loadContacts, addContact, removeContact, findContact, saveKeypair, loadKeypair, getOrCreateAccount, loadAccount } from "./contacts.js";
+import { checkAlgod, getAlgod, getIndexer, getSuggestedParams, submitAndWait } from "./algorand.js";
 
 async function main() {
   const init = await recvJson<InitMessage>();
@@ -130,6 +132,11 @@ async function cmdSend(args: string[]) {
     process.exit(1);
   }
 
+  if (!await checkAlgod()) {
+    sendError("Cannot reach algod. Is localnet running? Set ALGOD_URL if using a remote node.");
+    process.exit(1);
+  }
+
   const contact = await findContact(target);
   const address = contact?.address ?? target;
   const pskB64 = contact?.psk;
@@ -145,6 +152,7 @@ async function cmdSend(args: string[]) {
     process.exit(1);
   }
 
+  const account = await getOrCreateAccount();
   const initialPSK = base64ToPublicKey(pskB64);
   const recipientPubKey = base64ToPublicKey(pubkeyB64);
 
@@ -155,34 +163,35 @@ async function cmdSend(args: string[]) {
 
   const envelope = encryptPSKMessage(message, kp.publicKey, recipientPubKey, currentPSK, counter);
   const encoded = encodePSKEnvelope(envelope);
-  const noteB64 = Buffer.from(encoded).toString("base64");
+  const note = new Uint8Array(encoded);
 
-  const sendCmd = `goal clerk send -a 0 -f $(goal account list | head -1 | awk '{print $2}') -t ${address} --note "${noteB64}" 2>&1`;
-  const result = await sendExec(sendCmd);
+  const params = await getSuggestedParams();
+  const sender = algosdk.Address.fromString(account.address);
+  const receiver = algosdk.Address.fromString(address);
 
-  if (result.code !== 0) {
-    sendError(`Transaction failed: ${result.stderr || result.stdout}`);
-    process.exit(1);
-  }
+  const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+    sender,
+    receiver,
+    amount: BigInt(0),
+    suggestedParams: params,
+    note,
+  });
 
+  const signed = txn.signTxn(account.sk);
+  const txid = await submitAndWait(signed);
   await savePSKState(stateKey, newState);
-
-  const txid = result.stdout.trim().split("\n").pop() ?? "unknown";
   sendOutput(`Message sent to ${contact?.name ?? address} (txid: ${txid})`);
 }
 
 async function cmdRead(args: string[]) {
   let limit = 20;
   let from: string | undefined;
-  let indexerUrl = "http://localhost:8980";
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--limit" && args[i + 1]) {
       limit = parseInt(args[++i], 10);
     } else if (args[i] === "--from" && args[i + 1]) {
       from = args[++i];
-    } else if (args[i] === "--indexer" && args[i + 1]) {
-      indexerUrl = args[++i];
     }
   }
 
@@ -192,29 +201,25 @@ async function cmdRead(args: string[]) {
     process.exit(1);
   }
 
-  const addrResult = await sendExec("goal account list | head -1 | awk '{print $2}'");
-  if (addrResult.code !== 0 || !addrResult.stdout.trim()) {
-    sendError("Could not determine account address. Is localnet running?");
-    process.exit(1);
-  }
-  const myAddress = addrResult.stdout.trim();
-
-  const url = `${indexerUrl}/v2/accounts/${myAddress}/transactions?limit=${limit}`;
-  const fetchResult = await sendExec(`curl -s '${url}'`);
-  if (fetchResult.code !== 0 || !fetchResult.stdout.trim()) {
-    sendError("Could not reach indexer. Make sure localnet is running: fledge localnet start");
+  const account = await loadAccount();
+  if (!account) {
+    sendError("No Algorand account. Send a message first or run: fledge algochat keygen");
     process.exit(1);
   }
 
-  let txns: any;
+  let transactions: any[];
   try {
-    txns = JSON.parse(fetchResult.stdout);
+    const indexer = getIndexer();
+    const result = await indexer
+      .lookupAccountTransactions(account.address)
+      .limit(limit)
+      .do();
+    transactions = result.transactions ?? [];
   } catch {
-    sendError("Invalid response from indexer.");
+    sendError("Could not reach indexer. Make sure localnet is running. Set INDEXER_URL for remote.");
     process.exit(1);
   }
 
-  const transactions = txns.transactions ?? [];
   if (transactions.length === 0) {
     sendOutput("No transactions found.");
     return;
@@ -243,7 +248,7 @@ async function cmdRead(args: string[]) {
       continue;
     }
 
-    const senderAddr = tx["payment-transaction"]?.receiver === myAddress
+    const senderAddr = tx["payment-transaction"]?.receiver === account.address
       ? tx.sender
       : tx["payment-transaction"]?.receiver ?? tx.sender;
 
@@ -260,7 +265,7 @@ async function cmdRead(args: string[]) {
       const decrypted = decryptPSKMessage(envelope, kp.privateKey, kp.publicKey, currentPSK);
       if (!decrypted) continue;
 
-      const direction = tx.sender === myAddress ? "→" : "←";
+      const direction = tx.sender === account.address ? "→" : "←";
       const peer = contact.name ?? senderAddr.substring(0, 8) + "...";
       const round = tx["confirmed-round"] ?? "?";
       sendOutput(`[${round}] ${direction} ${peer}: ${decrypted.text}`);
