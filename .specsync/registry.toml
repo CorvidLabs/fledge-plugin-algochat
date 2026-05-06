@@ -1,0 +1,5 @@
+[registry]
+name = "fledge-plugin-algochat"
+
+[specs]
+algochat = "specs/algochat/algochat.spec.md"
