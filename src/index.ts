@@ -21,6 +21,15 @@ import { checkAlgod, getAlgod, getIndexer, getSuggestedParams, submitAndWait } f
 
 let jsonMode = false;
 
+function isValidAlgorandAddress(addr: string): boolean {
+  try {
+    algosdk.Address.fromString(addr);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function sendJson(data: unknown): void {
   sendOutput(JSON.stringify(data));
 }
@@ -81,6 +90,10 @@ async function cmdContacts(args: string[]) {
     const pubkey = args[4];
     if (!name || !address || !psk) {
       sendError("Usage: fledge algochat contacts add <name> <address> <psk-base64> [<pubkey-base64>]");
+      process.exit(1);
+    }
+    if (!isValidAlgorandAddress(address)) {
+      sendError(`Invalid Algorand address: ${address}`);
       process.exit(1);
     }
     await addContact(name, address, psk, pubkey);
@@ -176,6 +189,11 @@ async function cmdSend(args: string[]) {
 
   const contact = await findContact(target);
   const address = contact?.address ?? target;
+
+  if (!contact && !isValidAlgorandAddress(address)) {
+    sendError(`Unknown contact and invalid Algorand address: ${target}`);
+    process.exit(1);
+  }
   const pskB64 = contact?.psk;
   const pubkeyB64 = contact?.pubkey;
 
