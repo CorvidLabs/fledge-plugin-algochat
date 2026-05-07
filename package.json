@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "bun build src/index.ts --compile --outfile bin/fledge-algochat",
-    "test": "bun test"
+    "test": "bash hooks/build.sh && python3 test/test.py"
   },
   "dependencies": {
     "@corvidlabs/ts-algochat": "^0.4.0",

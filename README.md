@@ -16,7 +16,7 @@ Generate an X25519 keypair for encrypted communication.
 
 ```
 $ fledge algochat keygen --json
-{"publicKey":"xSlL38I3aU4YI8yQKhI19L5TFgnCTc7x2lvjhUMj934=","address":"PZZCVTTZ..."}
+{"ok":true,"publicKey":"xSlL38I3aU4YI8yQKhI19L5TFgnCTc7x2lvjhUMj934=","fingerprint":"a1b2c3d4e5f6..."}
 ```
 
 ### `fledge algochat contacts add <name> <addr> <psk> [pubkey]`
@@ -38,7 +38,7 @@ List all contacts.
 
 ```
 $ fledge algochat contacts --json
-[{"name":"magpie","address":"MGPY...","hasPublicKey":true}]
+{"contacts":[{"name":"magpie","address":"MGPY...","hasPsk":true,"hasPubkey":true}]}
 ```
 
 ### `fledge algochat contacts remove <name>`
@@ -62,7 +62,53 @@ Read incoming messages.
 
 ```
 $ fledge algochat read --limit 5 --json
-[{"from":"MGPY...","message":"Hi Corvid!","timestamp":"2026-05-06T18:30:00Z"}]
+{"messages":[{"round":42,"direction":"in","peer":"magpie","text":"Hi Corvid!","txid":"VJQ6...","pubkeyVerified":true,"timestamp":"2026-05-06T18:30:00Z"}],"total":5}
+```
+
+## JSON Output Reference
+
+All commands accept `--json` for machine-readable output. The shapes are:
+
+### `keygen --json`
+```json
+{ "ok": true, "publicKey": "<base64>", "fingerprint": "<hex>" }
+```
+
+### `contacts --json`
+```json
+{ "contacts": [{ "name": "alice", "address": "ALGO...", "hasPsk": true, "hasPubkey": true }] }
+```
+
+### `contacts add ... --json`
+```json
+{ "ok": true, "action": "add", "name": "alice", "address": "ALGO..." }
+```
+
+### `contacts add-uri ... --json`
+```json
+{ "ok": true, "action": "add-uri", "name": "alice", "address": "ALGO..." }
+```
+
+### `contacts remove ... --json`
+```json
+{ "ok": true, "action": "remove", "name": "alice" }
+```
+
+### `send ... --json`
+```json
+{ "ok": true, "to": "alice", "txid": "TXID...", "counter": 0 }
+```
+
+### `read --json`
+```json
+{ "messages": [{ "round": 42, "direction": "in", "peer": "alice", "text": "Hello!", "txid": "TXID...", "pubkeyVerified": true, "timestamp": "2026-05-06T18:30:00Z" }], "total": 20 }
+```
+
+The `timestamp` field is present only when the indexer provides `round-time`.
+
+### `version --json`
+```json
+{ "name": "fledge-plugin-algochat", "version": "0.1.0" }
 ```
 
 ## Data Persistence
@@ -100,12 +146,13 @@ export INDEXER_URL=http://<host-ip>:8980
 export KMD_URL=http://<host-ip>:4002
 ```
 
-## Security
+## Security Considerations
 
 - All sensitive state (private keys, mnemonics, PSKs) is stored with file mode `0600` (owner-read-only).
 - Algorand addresses are validated at input boundaries before use.
 - PSK ratchet counters are persisted durably to maintain forward secrecy across sessions.
 - Messages are encrypted with ChaCha20-Poly1305 via [@corvidlabs/ts-algochat](https://github.com/CorvidLabs/ts-algochat).
+- **Key material at rest is not encrypted.** The state file (`.fledge/algochat-state.json`) contains X25519 private keys, Algorand account mnemonics, and pre-shared keys as plaintext base64. Protection relies solely on UNIX file permissions (`0600`). This means any process running as the same user can read the file. If you need stronger isolation, restrict access at the OS level (e.g., separate user accounts, encrypted home directories, or a secrets manager). Encryption at rest may be added in a future version.
 
 ## Prerequisites
 
