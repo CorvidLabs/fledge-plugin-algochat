@@ -108,7 +108,7 @@ The `timestamp` field is present only when the indexer provides `round-time`.
 
 ### `version --json`
 ```json
-{ "name": "fledge-plugin-algochat", "version": "0.2.0" }
+{ "name": "fledge-plugin-algochat", "version": "0.3.0" }
 ```
 
 ## Data Persistence
