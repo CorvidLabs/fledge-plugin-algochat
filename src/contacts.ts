@@ -19,17 +19,20 @@ export async function loadContacts(): Promise<Contact[]> {
   return state.contacts;
 }
 
-export async function addContact(name: string, address: string, psk: string, pubkey?: string): Promise<void> {
+export async function addContact(name: string, address: string, psk: string, pubkey?: string): Promise<{ overwrite: boolean }> {
+  let overwrite = false;
   await withState(state => {
     const contact: Contact = { name, address, psk, ...(pubkey ? { pubkey } : {}) };
     const existing = state.contacts.findIndex(c => c.name === name);
     if (existing >= 0) {
       state.contacts[existing] = contact;
+      overwrite = true;
     } else {
       state.contacts.push(contact);
     }
     return state;
   });
+  return { overwrite };
 }
 
 export async function removeContact(name: string): Promise<boolean> {
