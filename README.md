@@ -113,7 +113,7 @@ The `timestamp` field is present only when the indexer provides `round-time`.
 
 ## Data Persistence
 
-Keypairs, contacts, Algorand account, and PSK ratchet counters are stored in `.fledge/algochat-state.json` within your project directory (mode `0600`). This file survives plugin reinstalls — your identity, contacts, and message counter state are preserved.
+Keypairs, contacts, Algorand account, and PSK ratchet counters are stored in `.fledge/algochat-state.json` within your project directory (mode `0600`). Reinstalling the plugin won't touch this file. Your identity, contacts, and message counter state persist across updates.
 
 **Important:** If you delete `.fledge/algochat-state.json`, you will lose your keypair and all contacts. Messages already sent on-chain remain, but you will not be able to decrypt them with a new keypair.
 
