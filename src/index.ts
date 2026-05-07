@@ -1,5 +1,5 @@
 import algosdk from "algosdk";
-import { recvJson, sendOutput, sendError, sendConfirm, type InitMessage } from "./protocol.js";
+import { recvJson, sendOutput, sendError, type InitMessage } from "./protocol.js";
 import {
   generateEphemeralKeyPair,
   encryptPSKMessage,
@@ -85,13 +85,7 @@ async function main() {
 
 async function cmdKeygen() {
   const existing = await loadKeypair();
-  if (existing && !jsonMode) {
-    const confirmed = await sendConfirm("A keypair already exists. Overwrite it?");
-    if (!confirmed) {
-      sendOutput("Cancelled.");
-      return;
-    }
-  }
+  const regenerated = !!existing;
 
   const kp = generateEphemeralKeyPair();
   await saveKeypair(kp.publicKey, kp.privateKey);
@@ -100,9 +94,9 @@ async function cmdKeygen() {
     fingerprint: fingerprint(kp.publicKey),
   };
   if (jsonMode) {
-    sendJson({ ok: true, ...data });
+    sendJson({ ok: true, regenerated, ...data });
   } else {
-    sendOutput(`Generated X25519 keypair.`);
+    sendOutput(regenerated ? `Regenerated X25519 keypair.` : `Generated X25519 keypair.`);
     sendOutput(`Public key: ${data.publicKey}`);
     sendOutput(`Fingerprint: ${data.fingerprint}`);
   }
@@ -124,11 +118,11 @@ async function cmdContacts(args: string[]) {
       sendError(`Invalid Algorand address: ${address}`);
       process.exit(1);
     }
-    await addContact(name, address, psk, pubkey);
+    const { overwrite } = await addContact(name, address, psk, pubkey);
     if (jsonMode) {
-      sendJson({ ok: true, action: "add", name, address });
+      sendJson({ ok: true, action: "add", name, address, ...(overwrite ? { overwrite: true } : {}) });
     } else {
-      sendOutput(`Added contact: ${name}`);
+      sendOutput(overwrite ? `Updated contact: ${name}` : `Added contact: ${name}`);
     }
     return;
   }
@@ -143,11 +137,13 @@ async function cmdContacts(args: string[]) {
     try {
       const parsed = parsePSKExchangeURI(uri);
       const pskB64 = publicKeyToBase64(parsed.psk);
-      await addContact(name, parsed.address, pskB64);
+      const { overwrite } = await addContact(name, parsed.address, pskB64);
       if (jsonMode) {
-        sendJson({ ok: true, action: "add-uri", name, address: parsed.address });
+        sendJson({ ok: true, action: "add-uri", name, address: parsed.address, ...(overwrite ? { overwrite: true } : {}) });
       } else {
-        sendOutput(`Added contact from URI: ${name} (${parsed.address.substring(0, 8)}...)`);
+        sendOutput(overwrite
+          ? `Updated contact from URI: ${name} (${parsed.address.substring(0, 8)}...)`
+          : `Added contact from URI: ${name} (${parsed.address.substring(0, 8)}...)`);
       }
     } catch (err) {
       sendError(`Invalid PSK exchange URI: ${err}`);
