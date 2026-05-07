@@ -73,6 +73,7 @@ async function main() {
     case "contacts": await cmdContacts(filteredArgs.slice(1)); break;
     case "send": await cmdSend(filteredArgs.slice(1)); break;
     case "read": await cmdRead(filteredArgs.slice(1)); break;
+    case "version": case "--version": case "-V": cmdVersion(); break;
     case "help": case "--help": case "-h": cmdHelp(); break;
     default:
       sendError(`Unknown command: ${subcmd}. Run: fledge algochat help`);
@@ -309,7 +310,7 @@ async function cmdRead(args: string[]) {
   }
 
   const contacts = await loadContacts();
-  const messages: { round: number; direction: string; peer: string; text: string; txid: string }[] = [];
+  const messages: { round: number; direction: string; peer: string; text: string; txid: string; pubkeyVerified?: boolean; timestamp?: string }[] = [];
 
   for (const tx of transactions) {
     const noteB64: string | undefined = tx.note;
@@ -390,7 +391,9 @@ async function cmdRead(args: string[]) {
 
       const peer = contact.name ?? senderAddr.substring(0, 8) + "...";
       const round = tx["confirmed-round"] ?? 0;
-      messages.push({ round, direction, peer, text: decrypted.text, txid: tx.id ?? "", pubkeyVerified });
+      const roundTime: number | undefined = tx["round-time"];
+      const timestamp = roundTime ? new Date(roundTime * 1000).toISOString() : undefined;
+      messages.push({ round, direction, peer, text: decrypted.text, txid: tx.id ?? "", pubkeyVerified, timestamp });
     } catch {
       continue;
     }
@@ -414,8 +417,19 @@ async function cmdRead(args: string[]) {
   } else {
     for (const m of messages) {
       const arrow = m.direction === "out" ? "→" : "←";
-      sendOutput(`[${m.round}] ${arrow} ${m.peer}: ${m.text}`);
+      const timeStr = m.timestamp ? ` ${m.timestamp}` : "";
+      sendOutput(`[${m.round}${timeStr}] ${arrow} ${m.peer}: ${m.text}`);
     }
+  }
+}
+
+const PLUGIN_VERSION = "0.1.0";
+
+function cmdVersion() {
+  if (jsonMode) {
+    sendJson({ name: "fledge-plugin-algochat", version: PLUGIN_VERSION });
+  } else {
+    sendOutput(`fledge-plugin-algochat ${PLUGIN_VERSION}`);
   }
 }
 
@@ -431,27 +445,46 @@ function cmdHelp() {
   sendOutput("  contacts add-uri <name> <uri>            Add via PSK exchange URI");
   sendOutput("  contacts remove <name>                   Remove contact");
   sendOutput("  keygen [--json]                          Generate X25519 keypair");
+  sendOutput("  version [--json]                         Show plugin version");
   sendOutput("");
   sendOutput("Use --json for machine-readable output.");
 }
+
+/** Maximum number of seen receive-counters to persist per contact.
+ *  Older values are discarded to prevent unbounded growth. */
+const SEEN_COUNTER_CAP = 1024;
 
 async function loadPSKState(key: string): Promise<PSKState> {
   const state = await loadState();
   const data = state.pskCounters[key];
   if (!data) return createPSKState();
+  // Apply the cap on load as well, in case persisted data predates the cap.
+  let counters = data.seenCounters ?? [];
+  if (counters.length > SEEN_COUNTER_CAP) {
+    counters = counters.slice().sort((a, b) => a - b).slice(counters.length - SEEN_COUNTER_CAP);
+  }
   return {
     sendCounter: data.sendCounter ?? 0,
     peerLastCounter: data.peerLastCounter ?? -1,
-    seenCounters: new Set(data.seenCounters ?? []),
+    seenCounters: new Set(counters),
   };
 }
 
 async function savePSKState(key: string, pskState: PSKState): Promise<void> {
   await withState(state => {
+    // Cap the seenCounters set: keep only the highest (most recent)
+    // values. Counters are monotonically increasing, so discarding the
+    // lowest is safe — the peerLastCounter window check already rejects
+    // anything far enough in the past.
+    let counters = Array.from(pskState.seenCounters);
+    if (counters.length > SEEN_COUNTER_CAP) {
+      counters.sort((a, b) => a - b);
+      counters = counters.slice(counters.length - SEEN_COUNTER_CAP);
+    }
     state.pskCounters[key] = {
       sendCounter: pskState.sendCounter,
       peerLastCounter: pskState.peerLastCounter,
-      seenCounters: Array.from(pskState.seenCounters),
+      seenCounters: counters,
     };
     return state;
   });

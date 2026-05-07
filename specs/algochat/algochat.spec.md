@@ -5,11 +5,13 @@ status: active
 files:
   - src/index.ts
   - src/protocol.ts
-  - src/crypto.ts
   - src/contacts.ts
+  - src/state.ts
+  - src/algorand.ts
 
 db_tables: []
-depends_on: []
+depends_on:
+  - "@corvidlabs/ts-algochat (X25519, XChaCha20-Poly1305, PSK ratchet, envelope codec)"
 ---
 
 # Algochat
@@ -27,9 +29,11 @@ Encrypted on-chain messaging via Algorand transactions. Implements the AlgoChat 
 | `send` | `<address-or-name> <message>` | Encrypt and send on-chain |
 | `read` | `[--limit N] [--from <addr>]` | Read and decrypt messages |
 | `contacts` | | List PSK contacts |
-| `contacts add` | `<name> <addr> <psk>` | Add contact |
+| `contacts add` | `<name> <addr> <psk> [pubkey]` | Add contact |
+| `contacts add-uri` | `<name> <algochat-psk://...>` | Add contact via PSK exchange URI |
 | `contacts remove` | `<name>` | Remove contact |
 | `keygen` | | Generate X25519 keypair |
+| `version` | | Print plugin version |
 
 ### Modules
 
@@ -37,15 +41,18 @@ Encrypted on-chain messaging via Algorand transactions. Implements the AlgoChat 
 |------|---------------|
 | `src/index.ts` | Entry point, init message parsing, command dispatch |
 | `src/protocol.ts` | fledge-v1 send/recv helpers |
-| `src/crypto.ts` | X25519 key exchange, XChaCha20-Poly1305 encrypt/decrypt |
-| `src/contacts.ts` | Contact CRUD via fledge-v1 store |
+| `src/contacts.ts` | Contact CRUD, keypair/account persistence |
+| `src/state.ts` | Durable state (`.fledge/algochat-state.json`), file locking |
+| `src/algorand.ts` | Algorand client helpers (algod, indexer, KMD) |
+
+> **Note:** Crypto (X25519, XChaCha20-Poly1305, PSK ratchet, envelope codec) is provided by the `@corvidlabs/ts-algochat` library — there is no local `src/crypto.ts`.
 
 ## Invariants
 
 1. All messages are encrypted with XChaCha20-Poly1305 before being sent on-chain.
 2. Nonces are 24 bytes, randomly generated per message, prepended to ciphertext.
 3. Keys are derived via HKDF-SHA256 from the X25519 shared secret.
-4. Contacts are stored via the fledge-v1 `store` capability as a JSON object.
+4. Contacts, keypairs, account, and PSK ratchet counters are stored in `.fledge/algochat-state.json` (mode `0600`) with file-lock protection for concurrent access.
 5. The plugin never sends a plaintext message on-chain.
 6. `keygen` overwrites any existing keypair after user confirmation.
 7. `send` resolves contact names to addresses before sending.
@@ -84,9 +91,7 @@ $ fledge algochat read --limit 5
 
 ## Dependencies
 
-- `@noble/curves` — X25519
-- `@noble/ciphers` — XChaCha20-Poly1305
-- `@noble/hashes` — HKDF-SHA256
+- `@corvidlabs/ts-algochat` — X25519, XChaCha20-Poly1305, HKDF, PSK ratchet, envelope codec
 - `algosdk` — Algorand transactions
 - fledge-v1 protocol
 
