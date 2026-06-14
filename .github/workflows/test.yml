@@ -2,13 +2,37 @@ name: test
 on:
   push:
     branches: [main]
+    paths:
+      - src/**
+      - test/**
+      - hooks/**
+      - package.json
+      - tsconfig*.json
+      - bun.lock
+      - bun.lockb
+      - plugin.toml
+      - .github/workflows/test.yml
   pull_request:
+    paths:
+      - src/**
+      - test/**
+      - hooks/**
+      - package.json
+      - tsconfig*.json
+      - bun.lock
+      - bun.lockb
+      - plugin.toml
+      - .github/workflows/test.yml
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
