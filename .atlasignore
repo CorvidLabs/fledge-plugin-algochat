@@ -1,0 +1,18 @@
+# Atlas coverage scope for fledge-plugin-algochat.
+#
+# The specs govern the TypeScript plugin source (src/), not the conformance
+# test suite, the static docs page (served on Pages), or the build hook. Keep
+# those out of the coverage denominator. Root-anchored subset of gitignore.
+
+# Conformance test suite.
+test/
+
+# Static docs page (served on Pages).
+docs/
+
+# Build hook.
+hooks/
+
+# Vendored / generated / minified.
+node_modules/
+*.min.*
