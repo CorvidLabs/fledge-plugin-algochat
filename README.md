@@ -1,5 +1,7 @@
 # fledge-plugin-algochat
 
+![spec coverage](https://img.shields.io/endpoint?url=https://corvidlabs.github.io/fledge-plugin-algochat/badges/coverage.json)
+
 Encrypted on-chain messaging plugin for [fledge](https://github.com/CorvidLabs/fledge). Implements the AlgoChat PSK v1.1 protocol via Algorand transactions, powered by [@corvidlabs/ts-algochat](https://github.com/CorvidLabs/ts-algochat).
 
 ## Install

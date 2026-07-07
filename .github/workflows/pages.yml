@@ -2,7 +2,7 @@ name: Deploy Pages
 on:
   push:
     branches: [main]
-    paths: [docs/**, .github/workflows/pages.yml]
+    paths: [docs/**, src/**, specs/**, .atlasignore, .github/workflows/pages.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,6 +11,10 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: false
+# Run the bundled Node-20 JavaScript actions on Node 24 to silence GitHub's
+# Node-20 end-of-life deprecation warnings.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 jobs:
   deploy:
     environment:
@@ -20,9 +24,35 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # atlas reads git history for activity
       - uses: actions/configure-pages@v5
         with:
           enablement: true
+
+      # Render this plugin's spec-coverage badge + SVG cards from the atlas into
+      # the Pages site (served at corvidlabs.github.io/fledge-plugin-algochat/badges/).
+      # Cached by the pinned v1 commit so the step is a fast no-op on a cache hit.
+      - name: Resolve pinned atlas commit (cache key)
+        id: atlasref
+        run: echo "sha=$(git ls-remote https://github.com/CorvidLabs/fledge-plugin-atlas v1 | cut -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the fledge-atlas CLI
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/fledge-atlas
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: fledge-atlas-${{ runner.os }}-${{ steps.atlasref.outputs.sha }}
+
+      - name: Render atlas coverage badges
+        uses: CorvidLabs/fledge-plugin-atlas@v1
+        with:
+          path: .
+          output-dir: docs/badges
+          components: "coverage langmix treemap sunburst"
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs
