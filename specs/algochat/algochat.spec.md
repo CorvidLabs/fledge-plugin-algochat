@@ -45,6 +45,15 @@ Encrypted on-chain messaging via Algorand transactions. Implements the AlgoChat 
 | `src/state.ts` | Durable state (`.fledge/algochat-state.json`), file locking |
 | `src/algorand.ts` | Algorand client helpers (algod, indexer, KMD) |
 
+### Exported API
+
+| Module | Exports |
+|--------|---------|
+| `src/protocol.ts` | `send`, `recv`, `recvJson`, `sendOutput`, `sendError`, `sendLog`, `sendExec`, `sendStore`, `sendLoad`, `sendPrompt`, `sendConfirm`, `InitMessage` |
+| `src/contacts.ts` | `Contact`, `AlgoAccount`, `loadContacts`, `addContact`, `removeContact`, `findContact`, `saveKeypair`, `loadKeypair`, `getOrCreateAccount`, `loadAccount` |
+| `src/state.ts` | `DurableState`, `initState`, `loadState`, `withState`, `saveState` |
+| `src/algorand.ts` | `getAlgod`, `getIndexer`, `checkAlgod`, `getSuggestedParams`, `submitAndWait`, `ensureFunded` |
+
 > **Note:** Crypto (X25519, XChaCha20-Poly1305, PSK ratchet, envelope codec) is provided by the `@corvidlabs/ts-algochat` library — there is no local `src/crypto.ts`.
 
 ## Invariants

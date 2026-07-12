@@ -1,0 +1,15 @@
+{
+  "bootstrap_policy": {
+    "base_commit": "a4e62732de6992d4dbd9a9dcc54ec0389d435346",
+    "digest": "a1b3b36d2688d9c0cf626b658db82061bdd1eeedbb14118c09d01d3362cddc6a",
+    "path": ".specsync/sdd.json"
+  },
+  "generated_at": 1783873858,
+  "requirements_needing_ids": [
+    {
+      "action": "review and assign one stable ID per durable requirement",
+      "path": "specs/algochat/requirements.md",
+      "suggested_first_id": "REQ-algochat-001"
+    }
+  ]
+}

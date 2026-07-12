@@ -1,0 +1,9 @@
+# fledge.toml: project task definitions
+[tasks]
+install = "bun install --frozen-lockfile"
+build = "bun run build"
+test = "bun run test"
+
+[lanes.verify]
+description = "Install dependencies, build, and test the AlgoChat plugin"
+steps = ["install", "build", "test"]
