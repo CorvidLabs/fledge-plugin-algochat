@@ -5,11 +5,5 @@
     "path": ".specsync/sdd.json"
   },
   "generated_at": 1783873858,
-  "requirements_needing_ids": [
-    {
-      "action": "review and assign one stable ID per durable requirement",
-      "path": "specs/algochat/requirements.md",
-      "suggested_first_id": "REQ-algochat-001"
-    }
-  ]
+  "requirements_needing_ids": []
 }

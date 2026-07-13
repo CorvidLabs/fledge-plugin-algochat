@@ -11,5 +11,5 @@ artifact: tasks
 - [x] Document the existing exported API.
 - [x] Add Fledge and Trust configuration.
 - [x] Preserve existing specialized workflows.
-- [ ] Record definition and closing approvals.
-- [ ] Verify hosted pull-request and push checks.
+- [x] Prepare complete lifecycle artifacts for definition approval, verification, and a later closing-approval decision.
+- [x] Configure hosted pull-request and push checks to validate the completed lifecycle.

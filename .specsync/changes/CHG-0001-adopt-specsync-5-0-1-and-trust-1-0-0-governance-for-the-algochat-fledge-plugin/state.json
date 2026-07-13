@@ -5,10 +5,10 @@
   "title": "Adopt SpecSync 5.0.1 and Trust 1.0.0 governance for the AlgoChat Fledge plugin",
   "description": "Adopt SpecSync 5.0.1 and Trust 1.0.0 governance for the AlgoChat Fledge plugin",
   "kind": "migration",
-  "state": "draft",
+  "state": "implementing",
   "base_commit": "a4e62732de6992d4dbd9a9dcc54ec0389d435346",
   "created_at": 1783873959,
-  "updated_at": 1783873969,
+  "updated_at": 1783952601,
   "affected_specs": [
     "algochat"
   ],
