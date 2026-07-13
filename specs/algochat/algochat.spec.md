@@ -1,6 +1,6 @@
 ---
 module: algochat
-version: 1
+version: 2
 status: active
 files:
   - src/index.ts
@@ -44,6 +44,44 @@ Encrypted on-chain messaging via Algorand transactions. Implements the AlgoChat 
 | `src/contacts.ts` | Contact CRUD, keypair/account persistence |
 | `src/state.ts` | Durable state (`.fledge/algochat-state.json`), file locking |
 | `src/algorand.ts` | Algorand client helpers (algod, indexer, KMD) |
+
+### Exported Symbols
+
+| Export | Module | Description |
+|--------|--------|-------------|
+| `send` | `src/protocol.ts` | Send a fledge protocol message. |
+| `recv` | `src/protocol.ts` | Receive one protocol line. |
+| `recvJson` | `src/protocol.ts` | Receive and decode a JSON protocol message. |
+| `sendOutput` | `src/protocol.ts` | Emit user-facing output. |
+| `sendError` | `src/protocol.ts` | Emit a protocol error. |
+| `sendLog` | `src/protocol.ts` | Emit a structured log message. |
+| `sendExec` | `src/protocol.ts` | Request command execution through fledge. |
+| `sendStore` | `src/protocol.ts` | Store a value through fledge. |
+| `sendLoad` | `src/protocol.ts` | Load a stored value through fledge. |
+| `sendPrompt` | `src/protocol.ts` | Request text input. |
+| `sendConfirm` | `src/protocol.ts` | Request confirmation. |
+| `InitMessage` | `src/protocol.ts` | Initialization-message shape. |
+| `Contact` | `src/contacts.ts` | Stored AlgoChat contact shape. |
+| `AlgoAccount` | `src/contacts.ts` | Persisted Algorand account shape. |
+| `loadContacts` | `src/contacts.ts` | Load stored contacts. |
+| `addContact` | `src/contacts.ts` | Add or replace a contact. |
+| `removeContact` | `src/contacts.ts` | Remove a named contact. |
+| `findContact` | `src/contacts.ts` | Find a contact by name or address. |
+| `saveKeypair` | `src/contacts.ts` | Persist the encryption keypair. |
+| `loadKeypair` | `src/contacts.ts` | Load the persisted encryption keypair. |
+| `getOrCreateAccount` | `src/contacts.ts` | Load or create the Algorand account. |
+| `loadAccount` | `src/contacts.ts` | Load the persisted Algorand account. |
+| `DurableState` | `src/state.ts` | Durable plugin-state shape. |
+| `initState` | `src/state.ts` | Initialize state storage for a project. |
+| `loadState` | `src/state.ts` | Load durable state. |
+| `withState` | `src/state.ts` | Mutate durable state under the file lock. |
+| `saveState` | `src/state.ts` | Persist durable state. |
+| `getAlgod` | `src/algorand.ts` | Create the configured algod client. |
+| `getIndexer` | `src/algorand.ts` | Create the configured indexer client. |
+| `checkAlgod` | `src/algorand.ts` | Check algod availability. |
+| `getSuggestedParams` | `src/algorand.ts` | Fetch transaction parameters. |
+| `submitAndWait` | `src/algorand.ts` | Submit a signed transaction and wait for confirmation. |
+| `ensureFunded` | `src/algorand.ts` | Check that an address meets the minimum balance. |
 
 > **Note:** Crypto (X25519, XChaCha20-Poly1305, PSK ratchet, envelope codec) is provided by the `@corvidlabs/ts-algochat` library — there is no local `src/crypto.ts`.
 
@@ -100,3 +138,5 @@ $ fledge algochat read --limit 5
 | Version | Date | Changes |
 |---------|------|---------|
 | 1 | 2026-05-06 | Initial spec |
+| 2 | 2026-07-13 | Reconciled existing API documentation and stable requirement IDs for SpecSync 5.0.1 governance; runtime behavior is unchanged. |
+| 2026-07-13 | CHG-0001-adopt-specsync-5-0-1-and-trust-1-0-0-governance-for-the-algochat-fledge-plugin: Adopt SpecSync 5.0.1 and Trust 1.0.0 governance for the AlgoChat Fledge plugin |

@@ -10,9 +10,20 @@ spec: algochat.spec.md
 
 ## Acceptance Criteria
 
-- Messages encrypted end-to-end using X25519 + XChaCha20-Poly1305
-- Compatible with corvid-agent's AlgoChat protocol
-- Works with localnet or remote algod
+### REQ-algochat-001
+
+Messages SHALL be encrypted end-to-end using X25519 and XChaCha20-Poly1305.
+
+Acceptance Criteria
+- Existing encrypted send/read regression tests pass without changing runtime behavior.
+
+### REQ-algochat-002
+
+The plugin SHALL remain compatible with corvid-agent's AlgoChat protocol.
+
+### REQ-algochat-003
+
+The plugin SHALL work with either localnet or a remote algod endpoint.
 
 ## Constraints
 
