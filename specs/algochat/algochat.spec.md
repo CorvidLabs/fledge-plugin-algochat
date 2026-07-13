@@ -1,6 +1,6 @@
 ---
 module: algochat
-version: 1
+version: 2
 status: active
 files:
   - src/index.ts
@@ -138,3 +138,5 @@ $ fledge algochat read --limit 5
 | Version | Date | Changes |
 |---------|------|---------|
 | 1 | 2026-05-06 | Initial spec |
+| 2 | 2026-07-13 | Reconciled existing API documentation and stable requirement IDs for SpecSync 5.0.1 governance; runtime behavior is unchanged. |
+| 2026-07-13 | CHG-0001-adopt-specsync-5-0-1-and-trust-1-0-0-governance-for-the-algochat-fledge-plugin: Adopt SpecSync 5.0.1 and Trust 1.0.0 governance for the AlgoChat Fledge plugin |

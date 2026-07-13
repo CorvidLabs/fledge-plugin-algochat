@@ -13,6 +13,13 @@
       "timestamp": 1783953041,
       "digest": "37685bc4d857ad3bb7b8a72540452ced6fc4fcee54796a7957871f84f21cee82",
       "note": "Fresh definition approval after portable verification and requirement-evidence corrections; prior approval history preserved."
+    },
+    {
+      "gate": "acceptance",
+      "actor": "user:0xLeif",
+      "timestamp": 1783953067,
+      "digest": "cea2123bc2d82ee6827aa51dcb14fdd249a9215669a7dd6ad506ac75ed537c46",
+      "note": "Closing approval recorded after successful committed-head native verification with portable requirement evidence."
     }
   ]
 }
