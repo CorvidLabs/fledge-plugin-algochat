@@ -11,3 +11,4 @@ artifact: testing
 - `fledge trust doctor`
 - `fledge trust verify`
 - Hosted `test` and `trust` jobs on the normal Ubuntu runner
+- `REQ-algochat-001`: encrypted send/read coverage is provided by `test/test.py` in the native verify lane.
